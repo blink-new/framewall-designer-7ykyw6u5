@@ -29,6 +29,12 @@ export function DesignerPage() {
 
   // Authentication state management
   useEffect(() => {
+    if (!blink) {
+      console.error('Blink client not initialized')
+      setAuthLoading(false)
+      return
+    }
+    
     const unsubscribe = blink.auth.onAuthStateChanged((state) => {
       setUser(state.user)
       setAuthLoading(state.isLoading)
@@ -53,13 +59,25 @@ export function DesignerPage() {
 
   // Calculate total price
   const calculateTotalPrice = useCallback(() => {
-    const total = cells.reduce((sum, cell) => {
-      const price = cell.frameSize?.price || 0
-      return sum + (typeof price === 'number' ? price : 0)
-    }, 0)
-    // Ensure the total is always a proper number with 2 decimal places
-    const validTotal = Number(total.toFixed(2))
-    setTotalPrice(isNaN(validTotal) ? 0 : validTotal)
+    try {
+      const total = cells.reduce((sum, cell) => {
+        if (!cell.frameSize || typeof cell.frameSize.price !== 'number') {
+          return sum
+        }
+        const price = Number(cell.frameSize.price)
+        if (isNaN(price) || price < 0) {
+          return sum
+        }
+        return sum + price
+      }, 0)
+      
+      // Ensure the total is always a proper number with 2 decimal places
+      const validTotal = Number(total.toFixed(2))
+      setTotalPrice(isNaN(validTotal) || validTotal < 0 ? 0 : validTotal)
+    } catch (error) {
+      console.error('Error calculating total price:', error)
+      setTotalPrice(0)
+    }
   }, [cells])
 
   // Update cells when grid size changes
@@ -92,6 +110,15 @@ export function DesignerPage() {
   }
 
   const handleImageUpload = async (cellId: string, file: File) => {
+    if (!blink) {
+      toast({
+        title: "Service Unavailable",
+        description: "Upload service is not available. Please refresh the page.",
+        variant: "destructive"
+      })
+      return
+    }
+
     try {
       const { publicUrl } = await blink.storage.upload(file, `designs/${Date.now()}-${file.name}`)
       
@@ -155,6 +182,15 @@ export function DesignerPage() {
   }
 
   const saveDesign = async () => {
+    if (!blink) {
+      toast({
+        title: "Service Unavailable",
+        description: "Save service is not available. Please refresh the page.",
+        variant: "destructive"
+      })
+      return
+    }
+
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -199,36 +235,50 @@ export function DesignerPage() {
       // Generate a unique ID for the design
       const designId = `design_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       
-      // Clean and validate cells data
+      // Clean and validate cells data - ensure all values are properly serializable
       const cleanCells = cells.map(cell => ({
-        id: cell.id,
-        row: cell.row,
-        col: cell.col,
+        id: String(cell.id),
+        row: Number(cell.row),
+        col: Number(cell.col),
         frameSize: cell.frameSize ? {
-          id: cell.frameSize.id,
-          name: cell.frameSize.name,
-          width: cell.frameSize.width,
-          height: cell.frameSize.height,
-          price: cell.frameSize.price
-        } : undefined,
-        imageUrl: cell.imageUrl || undefined,
-        imageName: cell.imageName || undefined
+          id: String(cell.frameSize.id),
+          name: String(cell.frameSize.name),
+          width: Number(cell.frameSize.width),
+          height: Number(cell.frameSize.height),
+          price: Number(cell.frameSize.price)
+        } : null,
+        imageUrl: cell.imageUrl ? String(cell.imageUrl) : null,
+        imageName: cell.imageName ? String(cell.imageName) : null
       }))
       
-      // Prepare design data with camelCase field names (SDK converts to snake_case)
+      // Ensure all required fields are present and properly typed
       const designData = {
-        id: designId,
-        name: designName.trim(),
-        userId: user.id, // Use camelCase - SDK converts to user_id
+        id: String(designId),
+        name: String(designName.trim()),
+        userId: String(user.id), // Use camelCase - SDK converts to user_id
         gridRows: Number(gridRows),
         gridCols: Number(gridCols),
-        cells: JSON.stringify(cleanCells),
-        totalPrice: Number(validTotalPrice.toFixed(2)),
+        cells: JSON.stringify(cleanCells), // Ensure valid JSON string
+        totalPrice: Number(parseFloat(validTotalPrice.toFixed(2))), // Ensure proper number format
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
       
       console.log('Saving design with data:', designData)
+      console.log('Cells JSON:', designData.cells)
+      
+      // Validate JSON before sending
+      try {
+        JSON.parse(designData.cells)
+      } catch (jsonError) {
+        console.error('Invalid JSON in cells:', jsonError)
+        toast({
+          title: "Data Error",
+          description: "Invalid design data. Please try again.",
+          variant: "destructive"
+        })
+        return
+      }
       
       await blink.db.designs.create(designData)
       
@@ -293,9 +343,14 @@ export function DesignerPage() {
           <p className="text-gray-600 mb-8">
             Please sign in to access the Frame Wall Designer and save your custom designs.
           </p>
-          <Button onClick={() => blink.auth.login()} size="lg" className="w-full">
+          <Button 
+            onClick={() => blink?.auth.login()} 
+            size="lg" 
+            className="w-full"
+            disabled={!blink}
+          >
             <LogIn className="mr-2 h-5 w-5" />
-            Sign In to Continue
+            {blink ? 'Sign In to Continue' : 'Service Loading...'}
           </Button>
         </div>
       </div>
