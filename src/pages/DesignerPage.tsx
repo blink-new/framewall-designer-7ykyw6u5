@@ -44,7 +44,7 @@ export function DesignerPage() {
       return sum + (cell.frameSize?.price || 0)
     }, 0)
     // Ensure the total is always a proper number with 2 decimal places
-    setTotalPrice(Number(total.toFixed(2)))
+    setTotalPrice(parseFloat(total.toFixed(2)))
   }, [cells])
 
   // Update cells when grid size changes
@@ -138,19 +138,21 @@ export function DesignerPage() {
     try {
       const user = await blink.auth.me()
       
-      // Ensure totalPrice is properly formatted as a number
+      // Prepare design data with proper camelCase field names and correct data types
       const designData = {
         name: designName,
         userId: user.id,
-        gridRows: Number(gridRows),
-        gridCols: Number(gridCols),
+        gridRows: gridRows,
+        gridCols: gridCols,
         cells: JSON.stringify(cells),
-        totalPrice: Number(totalPrice.toFixed(2)), // Ensure it's a proper number
+        totalPrice: totalPrice, // Keep as number - SDK will handle conversion
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
       
       console.log('Saving design with data:', designData)
+      console.log('Total price type:', typeof designData.totalPrice, 'Value:', designData.totalPrice)
+      
       await blink.db.designs.create(designData)
       
       alert('Design saved successfully!')
