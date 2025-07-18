@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
-import { Eye, Trash2, Calendar, DollarSign, Grid3X3 } from 'lucide-react'
+import { Eye, Trash2, Calendar, DollarSign, Grid3X3, LogIn } from 'lucide-react'
 import { Design } from '../types'
 import { blink } from '../blink/client'
 
@@ -12,19 +12,35 @@ interface GalleryPageProps {
 }
 
 export function GalleryPage({ onNavigate }: GalleryPageProps) {
+  const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [designs, setDesigns] = useState<Design[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null)
 
+  // Authentication state management
   useEffect(() => {
-    loadDesigns()
-  }, [])
+    const unsubscribe = blink.auth.onAuthStateChanged((state) => {
+      setUser(state.user)
+      setAuthLoading(state.isLoading)
+      
+      // Load designs when user is authenticated
+      if (state.user && !state.isLoading) {
+        loadDesigns(state.user)
+      } else if (!state.user && !state.isLoading) {
+        setLoading(false)
+      }
+    })
+    return unsubscribe
+  }, [loadDesigns])
 
-  const loadDesigns = async () => {
+  const loadDesigns = useCallback(async (currentUser?: any) => {
+    if (!currentUser && !user) return
+    
     try {
-      const user = await blink.auth.me()
+      const targetUser = currentUser || user
       const userDesigns = await blink.db.designs.list({
-        where: { userId: user.id },
+        where: { userId: targetUser.id },
         orderBy: { createdAt: 'desc' }
       })
       
@@ -40,7 +56,7 @@ export function GalleryPage({ onNavigate }: GalleryPageProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const deleteDesign = async (designId: string) => {
     if (!confirm('Are you sure you want to delete this design?')) return
@@ -59,6 +75,37 @@ export function GalleryPage({ onNavigate }: GalleryPageProps) {
       month: 'short',
       day: 'numeric'
     })
+  }
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading gallery...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show sign-in prompt if not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center">
+          <Grid3X3 className="h-16 w-16 text-blue-600 mx-auto mb-6" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign In Required</h1>
+          <p className="text-gray-600 mb-8">
+            Please sign in to view your saved frame wall designs.
+          </p>
+          <Button onClick={() => blink.auth.login()} size="lg" className="w-full">
+            <LogIn className="mr-2 h-5 w-5" />
+            Sign In to Continue
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

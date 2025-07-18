@@ -7,12 +7,14 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { Grid3X3, Upload, Save, Download, Trash2, RotateCcw, DollarSign, Eye } from 'lucide-react'
+import { Grid3X3, Upload, Save, Download, Trash2, RotateCcw, DollarSign, Eye, LogIn } from 'lucide-react'
 import { FRAME_SIZES } from '../data/frameSizes'
 import { FrameSize, GridCell } from '../types'
 import { blink } from '../blink/client'
 
 export function DesignerPage() {
+  const [user, setUser] = useState<any>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [gridRows, setGridRows] = useState(3)
   const [gridCols, setGridCols] = useState(4)
   const [cells, setCells] = useState<GridCell[]>([])
@@ -22,6 +24,15 @@ export function DesignerPage() {
   const [selectedCellForFrame, setSelectedCellForFrame] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Authentication state management
+  useEffect(() => {
+    const unsubscribe = blink.auth.onAuthStateChanged((state) => {
+      setUser(state.user)
+      setAuthLoading(state.isLoading)
+    })
+    return unsubscribe
+  }, [])
 
   // Initialize grid cells
   const initializeCells = useCallback(() => {
@@ -132,14 +143,17 @@ export function DesignerPage() {
   }
 
   const saveDesign = async () => {
+    if (!user) {
+      alert('Please sign in to save your design')
+      return
+    }
+
     if (!designName.trim()) {
       alert('Please enter a design name')
       return
     }
 
     try {
-      const user = await blink.auth.me()
-      
       // Validate that totalPrice is a valid number
       const validTotalPrice = Number(totalPrice)
       if (isNaN(validTotalPrice) || validTotalPrice < 0) {
@@ -147,20 +161,23 @@ export function DesignerPage() {
         return
       }
       
-      // Prepare design data with proper camelCase field names and correct data types
+      // Generate a unique ID for the design
+      const designId = `design_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      
+      // Prepare design data with proper field names matching database schema
       const designData = {
+        id: designId,
         name: designName.trim(),
-        userId: user.id,
-        gridRows: Number(gridRows),
-        gridCols: Number(gridCols),
+        user_id: user.id, // Use snake_case to match database schema
+        grid_rows: Number(gridRows),
+        grid_cols: Number(gridCols),
         cells: JSON.stringify(cells),
-        totalPrice: validTotalPrice,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        total_price: validTotalPrice,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
       
       console.log('Saving design with data:', designData)
-      console.log('Total price type:', typeof designData.totalPrice, 'Value:', designData.totalPrice)
       
       await blink.db.designs.create(designData)
       
@@ -170,6 +187,37 @@ export function DesignerPage() {
       console.error('Failed to save design:', error)
       alert('Failed to save design. Please try again.')
     }
+  }
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading designer...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show sign-in prompt if not authenticated
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center">
+          <Grid3X3 className="h-16 w-16 text-blue-600 mx-auto mb-6" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign In Required</h1>
+          <p className="text-gray-600 mb-8">
+            Please sign in to access the Frame Wall Designer and save your custom designs.
+          </p>
+          <Button onClick={() => blink.auth.login()} size="lg" className="w-full">
+            <LogIn className="mr-2 h-5 w-5" />
+            Sign In to Continue
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -241,25 +289,46 @@ export function DesignerPage() {
               </CardHeader>
               <CardContent>
                 <div 
-                  className="grid gap-2 p-4 bg-white rounded-lg border-2 border-dashed border-gray-200"
+                  className="grid gap-3 p-6 bg-white rounded-lg border-2 border-dashed border-gray-200"
                   style={{
                     gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
                     gridTemplateRows: `repeat(${gridRows}, 1fr)`,
-                    aspectRatio: `${gridCols}/${gridRows}`
+                    minHeight: '400px'
                   }}
                 >
-                  {cells.map((cell) => (
-                    <div
-                      key={cell.id}
-                      className={`relative aspect-square border-2 rounded-lg cursor-pointer transition-all hover:border-blue-300 ${
-                        cell.frameSize 
-                          ? 'border-blue-500 bg-blue-50' 
-                          : 'border-gray-200 bg-gray-50'
-                      }`}
-                      onClick={() => handleCellClick(cell.id)}
-                      onDrop={(e) => handleDrop(e, cell.id)}
-                      onDragOver={(e) => e.preventDefault()}
-                    >
+                  {cells.map((cell) => {
+                    // Calculate relative size for visual representation
+                    const getVisualScale = (frameSize: any) => {
+                      if (!frameSize) return 1
+                      const area = frameSize.width * frameSize.height
+                      const minArea = 4 * 6
+                      const maxArea = 20 * 24
+                      return 0.7 + (area - minArea) / (maxArea - minArea) * 0.6 // Scale between 0.7 and 1.3
+                    }
+
+                    const scale = getVisualScale(cell.frameSize)
+
+                    return (
+                      <div
+                        key={cell.id}
+                        className="relative flex items-center justify-center"
+                      >
+                        <div
+                          className={`relative border-2 rounded-lg cursor-pointer transition-all hover:border-blue-300 ${
+                            cell.frameSize 
+                              ? 'border-blue-500 bg-blue-50 shadow-md' 
+                              : 'border-gray-200 bg-gray-50'
+                          }`}
+                          style={{
+                            width: `${80 * scale}px`,
+                            height: `${80 * scale}px`,
+                            transform: cell.frameSize ? `scale(${scale})` : 'scale(1)',
+                            transformOrigin: 'center'
+                          }}
+                          onClick={() => handleCellClick(cell.id)}
+                          onDrop={(e) => handleDrop(e, cell.id)}
+                          onDragOver={(e) => e.preventDefault()}
+                        >
                       {cell.imageUrl ? (
                         <div className="relative w-full h-full">
                           <img
@@ -306,8 +375,10 @@ export function DesignerPage() {
                           )}
                         </div>
                       )}
-                    </div>
-                  ))}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -419,53 +490,110 @@ export function DesignerPage() {
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Design Preview</DialogTitle>
+            <DialogTitle>3D Frame Wall Preview</DialogTitle>
             <p className="text-sm text-gray-600">
-              Preview of your frame wall design
+              Realistic preview with proportional frame sizes and 3D depth
             </p>
           </DialogHeader>
           <div className="space-y-6">
             {/* Preview Canvas */}
-            <div className="bg-gray-100 p-8 rounded-lg">
+            <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-8 rounded-lg">
               <div 
-                className="grid gap-4 mx-auto bg-white p-6 rounded-lg shadow-lg"
+                className="grid gap-6 mx-auto bg-white p-8 rounded-lg shadow-2xl"
                 style={{
                   gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
                   gridTemplateRows: `repeat(${gridRows}, 1fr)`,
-                  aspectRatio: `${gridCols}/${gridRows}`,
-                  maxWidth: '600px'
+                  maxWidth: '700px',
+                  minHeight: '400px'
                 }}
               >
-                {cells.map((cell) => (
-                  <div
-                    key={cell.id}
-                    className={`relative aspect-square rounded-lg overflow-hidden ${
-                      cell.frameSize 
-                        ? 'bg-white border-4 border-gray-800 shadow-md' 
-                        : 'bg-gray-200 border-2 border-dashed border-gray-300'
-                    }`}
-                  >
-                    {cell.imageUrl ? (
-                      <img
-                        src={cell.imageUrl}
-                        alt={cell.imageName}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : cell.frameSize ? (
-                      <div className="w-full h-full flex items-center justify-center bg-gray-50">
-                        <span className="text-gray-400 text-xs text-center">
-                          {cell.frameSize.name}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-gray-400 text-xs">Empty</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {cells.map((cell) => {
+                  // Calculate relative size based on frame dimensions
+                  const getFrameScale = (frameSize: any) => {
+                    if (!frameSize) return 1
+                    const area = frameSize.width * frameSize.height
+                    const minArea = 4 * 6 // 4x6 is smallest
+                    const maxArea = 20 * 24 // 20x24 is largest
+                    return 0.6 + (area - minArea) / (maxArea - minArea) * 0.8 // Scale between 0.6 and 1.4
+                  }
+
+                  const scale = getFrameScale(cell.frameSize)
+                  const frameDepth = cell.frameSize ? Math.max(8, scale * 12) : 4
+
+                  return (
+                    <div
+                      key={cell.id}
+                      className="relative flex items-center justify-center"
+                      style={{
+                        transform: `scale(${scale})`,
+                        transformOrigin: 'center'
+                      }}
+                    >
+                      {cell.frameSize ? (
+                        <div
+                          className="relative bg-gradient-to-br from-amber-900 via-amber-800 to-amber-900 rounded-sm shadow-2xl"
+                          style={{
+                            width: `${Math.max(80, cell.frameSize.width * 4)}px`,
+                            height: `${Math.max(80, cell.frameSize.height * 4)}px`,
+                            boxShadow: `
+                              0 ${frameDepth}px ${frameDepth * 2}px rgba(0,0,0,0.3),
+                              inset 0 2px 4px rgba(255,255,255,0.2),
+                              inset 0 -2px 4px rgba(0,0,0,0.3)
+                            `,
+                            border: '3px solid #92400e',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          {/* Inner frame shadow */}
+                          <div 
+                            className="absolute inset-2 bg-white rounded-sm shadow-inner"
+                            style={{
+                              boxShadow: 'inset 0 0 8px rgba(0,0,0,0.2)'
+                            }}
+                          >
+                            {cell.imageUrl ? (
+                              <img
+                                src={cell.imageUrl}
+                                alt={cell.imageName}
+                                className="w-full h-full object-cover rounded-sm"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-sm">
+                                <div className="text-gray-400 text-xs text-center mb-1">
+                                  {cell.frameSize.name}
+                                </div>
+                                <div className="text-gray-300 text-xs">
+                                  ${cell.frameSize.price}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Frame highlight */}
+                          <div 
+                            className="absolute inset-0 rounded-sm"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%, rgba(0,0,0,0.2) 100%)'
+                            }}
+                          />
+                          
+                          {/* Size label */}
+                          <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
+                            <div className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                              {cell.frameSize.name}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                          <span className="text-gray-400 text-xs">Empty</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
