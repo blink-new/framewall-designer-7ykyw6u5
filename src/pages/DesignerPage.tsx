@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { Grid3X3, Upload, Save, Download, Trash2, RotateCcw, DollarSign } from 'lucide-react'
+import { Grid3X3, Upload, Save, Download, Trash2, RotateCcw, DollarSign, Eye } from 'lucide-react'
 import { FRAME_SIZES } from '../data/frameSizes'
 import { FrameSize, GridCell } from '../types'
 import { blink } from '../blink/client'
@@ -20,6 +20,7 @@ export function DesignerPage() {
   const [designName, setDesignName] = useState('')
   const [totalPrice, setTotalPrice] = useState(0)
   const [selectedCellForFrame, setSelectedCellForFrame] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Initialize grid cells
@@ -46,13 +47,14 @@ export function DesignerPage() {
   }, [cells])
 
   // Update cells when grid size changes
-  useState(() => {
+  useEffect(() => {
     initializeCells()
-  })
+  }, [initializeCells])
 
-  useState(() => {
+  // Calculate total price when cells change
+  useEffect(() => {
     calculateTotalPrice()
-  })
+  }, [calculateTotalPrice])
 
   const handleCellClick = (cellId: string) => {
     const cell = cells.find(c => c.id === cellId)
@@ -197,77 +199,28 @@ export function DesignerPage() {
                 </div>
               </CardContent>
             </Card>
-
-
-
-            {/* Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="w-full">
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Design
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Save Design</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="designName">Design Name</Label>
-                        <Input
-                          id="designName"
-                          value={designName}
-                          onChange={(e) => setDesignName(e.target.value)}
-                          placeholder="My Frame Wall Design"
-                        />
-                      </div>
-                      <Button onClick={saveDesign} className="w-full">
-                        Save Design
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                
-                <Button variant="outline" className="w-full" onClick={clearAllCells}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Clear All
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Price Display */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Total Price
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-blue-600">
-                  ${totalPrice.toFixed(2)}
-                </div>
-                <p className="text-sm text-gray-600 mt-1">
-                  {cells.filter(cell => cell.frameSize).length} frames selected
-                </p>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Main Canvas */}
           <div className="lg:col-span-3">
             <Card>
               <CardHeader>
-                <CardTitle>Design Canvas</CardTitle>
-                <p className="text-sm text-gray-600">
-                  Click empty cells to select frame size, drag images to upload
-                </p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>Design Canvas</CardTitle>
+                    <p className="text-sm text-gray-600">
+                      Click empty cells to select frame size, drag images to upload
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowPreview(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div 
@@ -341,6 +294,68 @@ export function DesignerPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Total Price and Actions - Below Canvas */}
+            <div className="grid md:grid-cols-2 gap-6 mt-6">
+              {/* Price Display */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5" />
+                    Total Price
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-blue-600">
+                    ${totalPrice.toFixed(2)}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {cells.filter(cell => cell.frameSize).length} frames selected
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Actions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button className="w-full">
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Design
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Save Design</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="designName">Design Name</Label>
+                          <Input
+                            id="designName"
+                            value={designName}
+                            onChange={(e) => setDesignName(e.target.value)}
+                            placeholder="My Frame Wall Design"
+                          />
+                        </div>
+                        <Button onClick={saveDesign} className="w-full">
+                          Save Design
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  
+                  <Button variant="outline" className="w-full" onClick={clearAllCells}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Clear All
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
@@ -381,6 +396,80 @@ export function DesignerPage() {
                 </div>
               </button>
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Design Preview</DialogTitle>
+            <p className="text-sm text-gray-600">
+              Preview of your frame wall design
+            </p>
+          </DialogHeader>
+          <div className="space-y-6">
+            {/* Preview Canvas */}
+            <div className="bg-gray-100 p-8 rounded-lg">
+              <div 
+                className="grid gap-4 mx-auto bg-white p-6 rounded-lg shadow-lg"
+                style={{
+                  gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+                  gridTemplateRows: `repeat(${gridRows}, 1fr)`,
+                  aspectRatio: `${gridCols}/${gridRows}`,
+                  maxWidth: '600px'
+                }}
+              >
+                {cells.map((cell) => (
+                  <div
+                    key={cell.id}
+                    className={`relative aspect-square rounded-lg overflow-hidden ${
+                      cell.frameSize 
+                        ? 'bg-white border-4 border-gray-800 shadow-md' 
+                        : 'bg-gray-200 border-2 border-dashed border-gray-300'
+                    }`}
+                  >
+                    {cell.imageUrl ? (
+                      <img
+                        src={cell.imageUrl}
+                        alt={cell.imageName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : cell.frameSize ? (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                        <span className="text-gray-400 text-xs text-center">
+                          {cell.frameSize.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-gray-400 text-xs">Empty</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Preview Summary */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-blue-900 mb-2">Design Summary</h3>
+                <div className="space-y-1 text-sm text-blue-800">
+                  <p>Grid Size: {gridRows} × {gridCols}</p>
+                  <p>Total Frames: {cells.filter(cell => cell.frameSize).length}</p>
+                  <p>With Images: {cells.filter(cell => cell.imageUrl).length}</p>
+                </div>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-green-900 mb-2">Pricing</h3>
+                <div className="text-2xl font-bold text-green-700">
+                  ${totalPrice.toFixed(2)}
+                </div>
+                <p className="text-sm text-green-600">Total estimated cost</p>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
