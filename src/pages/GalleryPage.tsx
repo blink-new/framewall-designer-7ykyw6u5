@@ -30,7 +30,8 @@ export function GalleryPage({ onNavigate }: GalleryPageProps) {
       
       const parsedDesigns = userDesigns.map(design => ({
         ...design,
-        cells: JSON.parse(design.cells || '[]')
+        cells: JSON.parse(design.cells || '[]'),
+        totalPrice: Number(design.totalPrice) // Ensure totalPrice is a number
       }))
       
       setDesigns(parsedDesigns)
