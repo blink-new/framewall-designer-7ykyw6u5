@@ -6,6 +6,7 @@ import { Slider } from '../components/ui/slider'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Grid3X3, Upload, Save, Download, Trash2, RotateCcw, DollarSign } from 'lucide-react'
 import { FRAME_SIZES } from '../data/frameSizes'
 import { FrameSize, GridCell } from '../types'
@@ -14,11 +15,11 @@ import { blink } from '../blink/client'
 export function DesignerPage() {
   const [gridRows, setGridRows] = useState(3)
   const [gridCols, setGridCols] = useState(4)
-  const [selectedFrameSize, setSelectedFrameSize] = useState<FrameSize>(FRAME_SIZES[0])
   const [cells, setCells] = useState<GridCell[]>([])
   const [draggedCell, setDraggedCell] = useState<GridCell | null>(null)
   const [designName, setDesignName] = useState('')
   const [totalPrice, setTotalPrice] = useState(0)
+  const [selectedCellForFrame, setSelectedCellForFrame] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Initialize grid cells
@@ -54,11 +55,22 @@ export function DesignerPage() {
   })
 
   const handleCellClick = (cellId: string) => {
-    setCells(prev => prev.map(cell => 
-      cell.id === cellId 
-        ? { ...cell, frameSize: selectedFrameSize }
-        : cell
-    ))
+    const cell = cells.find(c => c.id === cellId)
+    if (!cell?.frameSize) {
+      // Open frame size selector for this cell
+      setSelectedCellForFrame(cellId)
+    }
+  }
+
+  const handleFrameSizeSelect = (frameSize: FrameSize) => {
+    if (selectedCellForFrame) {
+      setCells(prev => prev.map(cell => 
+        cell.id === selectedCellForFrame 
+          ? { ...cell, frameSize }
+          : cell
+      ))
+      setSelectedCellForFrame(null)
+    }
   }
 
   const handleImageUpload = async (cellId: string, file: File) => {
@@ -186,30 +198,7 @@ export function DesignerPage() {
               </CardContent>
             </Card>
 
-            {/* Frame Size Selector */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Frame Sizes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-2">
-                  {FRAME_SIZES.map((size) => (
-                    <button
-                      key={size.id}
-                      onClick={() => setSelectedFrameSize(size)}
-                      className={`p-3 rounded-lg border text-left transition-colors ${
-                        selectedFrameSize.id === size.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="font-medium">{size.name}</div>
-                      <div className="text-sm text-gray-600">${size.price}</div>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+
 
             {/* Actions */}
             <Card>
@@ -277,7 +266,7 @@ export function DesignerPage() {
               <CardHeader>
                 <CardTitle>Design Canvas</CardTitle>
                 <p className="text-sm text-gray-600">
-                  Click cells to add frames, drag images to upload
+                  Click empty cells to select frame size, drag images to upload
                 </p>
               </CardHeader>
               <CardContent>
@@ -324,17 +313,27 @@ export function DesignerPage() {
                           )}
                         </div>
                       ) : (
-                        <div 
-                          className="w-full h-full flex flex-col items-center justify-center text-gray-400 hover:text-gray-600"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleFileSelect(cell.id)
-                          }}
-                        >
-                          <Upload className="h-6 w-6 mb-1" />
-                          <span className="text-xs text-center">
-                            {cell.frameSize ? cell.frameSize.name : 'Add Frame'}
-                          </span>
+                        <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 hover:text-gray-600">
+                          {cell.frameSize ? (
+                            <div 
+                              className="w-full h-full flex flex-col items-center justify-center cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleFileSelect(cell.id)
+                              }}
+                            >
+                              <Upload className="h-6 w-6 mb-1" />
+                              <span className="text-xs text-center">Add Image</span>
+                              <span className="text-xs text-center font-medium text-blue-600">
+                                {cell.frameSize.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center">
+                              <div className="text-2xl mb-1">+</div>
+                              <span className="text-xs text-center">Select Frame</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -352,6 +351,39 @@ export function DesignerPage() {
         accept="image/*"
         className="hidden"
       />
+
+      {/* Frame Size Selection Dialog */}
+      <Dialog open={selectedCellForFrame !== null} onOpenChange={() => setSelectedCellForFrame(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Frame Size</DialogTitle>
+            <p className="text-sm text-gray-600">Choose a frame size for this position</p>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto">
+            {FRAME_SIZES.map((size) => (
+              <button
+                key={size.id}
+                onClick={() => handleFrameSizeSelect(size)}
+                className="p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 text-left transition-colors group"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-medium text-gray-900 group-hover:text-blue-700">
+                      {size.name}
+                    </div>
+                    <div className="text-sm text-gray-500 mt-1">
+                      {size.width}" × {size.height}"
+                    </div>
+                  </div>
+                  <div className="text-lg font-bold text-blue-600">
+                    ${size.price}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
