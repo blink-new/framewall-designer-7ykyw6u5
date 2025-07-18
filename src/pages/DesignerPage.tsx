@@ -11,8 +11,10 @@ import { Grid3X3, Upload, Save, Download, Trash2, RotateCcw, DollarSign, Eye, Lo
 import { FRAME_SIZES } from '../data/frameSizes'
 import { FrameSize, GridCell } from '../types'
 import { blink } from '../blink/client'
+import { useToast } from '../hooks/use-toast'
 
 export function DesignerPage() {
+  const { toast } = useToast()
   const [user, setUser] = useState<any>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [gridRows, setGridRows] = useState(3)
@@ -98,8 +100,18 @@ export function DesignerPage() {
           ? { ...cell, imageUrl: publicUrl, imageName: file.name }
           : cell
       ))
+      
+      toast({
+        title: "Image Uploaded",
+        description: `${file.name} has been uploaded successfully.`,
+      })
     } catch (error) {
       console.error('Failed to upload image:', error)
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -144,12 +156,20 @@ export function DesignerPage() {
 
   const saveDesign = async () => {
     if (!user) {
-      alert('Please sign in to save your design')
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to save your design",
+        variant: "destructive"
+      })
       return
     }
 
     if (!designName.trim()) {
-      alert('Please enter a design name')
+      toast({
+        title: "Design Name Required",
+        description: "Please enter a design name",
+        variant: "destructive"
+      })
       return
     }
 
@@ -157,35 +177,97 @@ export function DesignerPage() {
       // Validate that totalPrice is a valid number
       const validTotalPrice = Number(totalPrice)
       if (isNaN(validTotalPrice) || validTotalPrice < 0) {
-        alert('Invalid total price calculated. Please check your frame selections.')
+        toast({
+          title: "Invalid Price",
+          description: "Invalid total price calculated. Please check your frame selections.",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      // Validate that we have at least one frame selected
+      const framesWithSizes = cells.filter(cell => cell.frameSize)
+      if (framesWithSizes.length === 0) {
+        toast({
+          title: "No Frames Selected",
+          description: "Please select at least one frame size before saving.",
+          variant: "destructive"
+        })
         return
       }
       
       // Generate a unique ID for the design
       const designId = `design_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       
-      // Prepare design data with proper field names matching database schema
+      // Clean and validate cells data
+      const cleanCells = cells.map(cell => ({
+        id: cell.id,
+        row: cell.row,
+        col: cell.col,
+        frameSize: cell.frameSize ? {
+          id: cell.frameSize.id,
+          name: cell.frameSize.name,
+          width: cell.frameSize.width,
+          height: cell.frameSize.height,
+          price: cell.frameSize.price
+        } : undefined,
+        imageUrl: cell.imageUrl || undefined,
+        imageName: cell.imageName || undefined
+      }))
+      
+      // Prepare design data with camelCase field names (SDK converts to snake_case)
       const designData = {
         id: designId,
         name: designName.trim(),
-        user_id: user.id, // Use snake_case to match database schema
-        grid_rows: Number(gridRows),
-        grid_cols: Number(gridCols),
-        cells: JSON.stringify(cells),
-        total_price: validTotalPrice,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        userId: user.id, // Use camelCase - SDK converts to user_id
+        gridRows: Number(gridRows),
+        gridCols: Number(gridCols),
+        cells: JSON.stringify(cleanCells),
+        totalPrice: Number(validTotalPrice.toFixed(2)),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
       
       console.log('Saving design with data:', designData)
       
       await blink.db.designs.create(designData)
       
-      alert('Design saved successfully!')
+      toast({
+        title: "Design Saved!",
+        description: `"${designName.trim()}" has been saved successfully.`,
+      })
       setDesignName('')
     } catch (error) {
       console.error('Failed to save design:', error)
-      alert('Failed to save design. Please try again.')
+      
+      // More specific error handling
+      if (error instanceof Error) {
+        if (error.message.includes('500')) {
+          toast({
+            title: "Server Error",
+            description: "Server error occurred while saving. Please check your data and try again.",
+            variant: "destructive"
+          })
+        } else if (error.message.includes('network')) {
+          toast({
+            title: "Network Error",
+            description: "Network error. Please check your connection and try again.",
+            variant: "destructive"
+          })
+        } else {
+          toast({
+            title: "Save Failed",
+            description: `Failed to save design: ${error.message}`,
+            variant: "destructive"
+          })
+        }
+      } else {
+        toast({
+          title: "Save Failed",
+          description: "Failed to save design. Please try again.",
+          variant: "destructive"
+        })
+      }
     }
   }
 
