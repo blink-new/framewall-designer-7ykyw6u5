@@ -4,6 +4,7 @@ import { HomePage } from './pages/HomePage'
 import { DesignerPage } from './pages/DesignerPage'
 import { GalleryPage } from './pages/GalleryPage'
 import { ProfilePage } from './pages/ProfilePage'
+import AdminPage from './pages/AdminPage'
 import { Toaster } from './components/ui/toaster'
 
 function App() {
@@ -19,6 +20,8 @@ function App() {
         return <GalleryPage onNavigate={setCurrentPage} />
       case 'profile':
         return <ProfilePage />
+      case 'admin':
+        return <AdminPage />
       default:
         return <HomePage onNavigate={setCurrentPage} />
     }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '../ui/button'
 import { Avatar, AvatarFallback } from '../ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu'
-import { User, LogOut, Settings, Grid3X3 } from 'lucide-react'
+import { User, LogOut, Settings, Grid3X3, Shield } from 'lucide-react'
 import { blink } from '../../blink/client'
 
 interface HeaderProps {
@@ -102,6 +102,10 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
                   <DropdownMenuItem onClick={() => onNavigate('profile')}>
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onNavigate('admin')}>
+                    <Shield className="mr-2 h-4 w-4" />
+                    <span>Admin</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onNavigate('settings')}>
                     <Settings className="mr-2 h-4 w-4" />
