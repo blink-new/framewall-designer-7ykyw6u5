@@ -41,10 +41,12 @@ export function DesignerPage() {
   // Calculate total price
   const calculateTotalPrice = useCallback(() => {
     const total = cells.reduce((sum, cell) => {
-      return sum + (cell.frameSize?.price || 0)
+      const price = cell.frameSize?.price || 0
+      return sum + (typeof price === 'number' ? price : 0)
     }, 0)
     // Ensure the total is always a proper number with 2 decimal places
-    setTotalPrice(parseFloat(total.toFixed(2)))
+    const validTotal = Number(total.toFixed(2))
+    setTotalPrice(isNaN(validTotal) ? 0 : validTotal)
   }, [cells])
 
   // Update cells when grid size changes
@@ -138,14 +140,21 @@ export function DesignerPage() {
     try {
       const user = await blink.auth.me()
       
+      // Validate that totalPrice is a valid number
+      const validTotalPrice = Number(totalPrice)
+      if (isNaN(validTotalPrice) || validTotalPrice < 0) {
+        alert('Invalid total price calculated. Please check your frame selections.')
+        return
+      }
+      
       // Prepare design data with proper camelCase field names and correct data types
       const designData = {
-        name: designName,
+        name: designName.trim(),
         userId: user.id,
-        gridRows: gridRows,
-        gridCols: gridCols,
+        gridRows: Number(gridRows),
+        gridCols: Number(gridCols),
         cells: JSON.stringify(cells),
-        totalPrice: totalPrice, // Keep as number - SDK will handle conversion
+        totalPrice: validTotalPrice,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
@@ -159,7 +168,7 @@ export function DesignerPage() {
       setDesignName('')
     } catch (error) {
       console.error('Failed to save design:', error)
-      alert('Failed to save design')
+      alert('Failed to save design. Please try again.')
     }
   }
 

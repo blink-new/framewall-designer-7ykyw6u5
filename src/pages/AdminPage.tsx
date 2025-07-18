@@ -272,7 +272,8 @@ export default function AdminPage() {
             filteredOrders.map((order) => {
               const design = getDesignDetails(order.design_id);
               const frameDetails = parseFrameDetails(order.frame_details);
-              const StatusIcon = statusConfig[order.order_status].icon;
+              const statusInfo = statusConfig[order.order_status] || statusConfig.received;
+              const StatusIcon = statusInfo.icon;
               
               return (
                 <Card key={order.id} className="hover:shadow-md transition-shadow">
@@ -285,10 +286,10 @@ export default function AdminPage() {
                           </h3>
                           <Badge 
                             variant="secondary" 
-                            className={`${statusConfig[order.order_status].color} text-white`}
+                            className={`${statusInfo.color} text-white`}
                           >
                             <StatusIcon className="h-3 w-3 mr-1" />
-                            {statusConfig[order.order_status].label}
+                            {statusInfo.label}
                           </Badge>
                         </div>
                         
